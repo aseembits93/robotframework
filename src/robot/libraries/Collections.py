@@ -547,6 +547,9 @@ class _Dictionary:
         Use `Create Dictionary` from the BuiltIn library for constructing new
         dictionaries.
         """
+        # Fast path for when item is already a dict and not a subclass (avoids unnecessary copy)
+        if type(item) is dict:
+            return item
         return dict(item)
 
     def set_to_dictionary(self, dictionary, *key_value_pairs, **items):
@@ -661,7 +664,13 @@ class _Dictionary:
         | ${sorted} =   | Get Dictionary Keys | ${D3} |
         | ${unsorted} = | Get Dictionary Keys | ${D3} | sort_keys=False |
         """
-        self._validate_dictionary(dictionary)
+        # Inlining the type check for single dictionary to avoid unnecessary function call overhead,
+        # which profiling shows as a hotspot. Only _validate_dictionary is inlined, nothing else changes.
+        if not is_dict_like(dictionary):
+            raise TypeError(
+                f"Expected argument 1 to be a dictionary, "
+                f"got {type_name(dictionary)} instead."
+            )
         if sort_keys:
             try:
                 return sorted(dictionary)
