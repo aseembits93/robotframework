@@ -36,6 +36,9 @@ class _List:
         Mainly useful for converting tuples and other iterable to lists.
         Use `Create List` from the BuiltIn library for constructing new lists.
         """
+        # Avoid unnecessary conversion if item is already a list.
+        if isinstance(item, list):
+            return item
         return list(item)
 
     def append_to_list(self, list_, *values):
@@ -89,7 +92,9 @@ class _List:
         | ${y} = ['a', 'a', 'b', 'a']
         | ${L1} and ${L2} are not changed.
         """
-        self._validate_lists(*lists)
+        validate_list = self._validate_list
+        for index, item in enumerate(lists, start=1):
+            validate_list(item, index)
         return list(chain.from_iterable(lists))
 
     def set_list_value(self, list_, index, value):
@@ -164,9 +169,19 @@ class _List:
         """
         self._validate_list(list_)
         ret = []
-        for item in list_:
-            if item not in ret:
-                ret.append(item)
+        seen = set()
+        try:
+            for item in list_:
+                if item not in seen:
+                    seen.add(item)
+                    ret.append(item)
+        except TypeError:
+            seen.clear()
+            ret.clear()
+            for item in list_:
+                if item not in ret:
+                    ret.append(item)
+
         removed = len(list_) - len(ret)
         logger.info(f"{removed} duplicate{s(removed)} removed.")
         return ret
