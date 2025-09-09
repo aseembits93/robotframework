@@ -547,6 +547,9 @@ class _Dictionary:
         Use `Create Dictionary` from the BuiltIn library for constructing new
         dictionaries.
         """
+        # Fast path for when item is already a dict and not a subclass (avoids unnecessary copy)
+        if type(item) is dict:
+            return item
         return dict(item)
 
     def set_to_dictionary(self, dictionary, *key_value_pairs, **items):
@@ -576,8 +579,9 @@ class _Dictionary:
                 "Adding data to a dictionary failed. There should be even "
                 "number of key-value-pairs."
             )
-        for i in range(0, len(key_value_pairs), 2):
-            dictionary[key_value_pairs[i]] = key_value_pairs[i + 1]
+        it = iter(key_value_pairs)
+        for k, v in zip(it, it):
+            dictionary[k] = v
         dictionary.update(items)
         return dictionary
 
