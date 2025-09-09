@@ -107,9 +107,12 @@ class Languages:
             return False
 
     def _add_language(self, lang: "Language"):
-        if lang in self.languages:
+        if not hasattr(self, "_languages_set"):
+            self._languages_set = set(self.languages)
+        if lang in self._languages_set:
             return
         self.languages.append(lang)
+        self._languages_set.add(lang)
         self.headers.update({n.title(): lang.headers[n] for n in lang.headers if n})
         self.settings.update({n.title(): lang.settings[n] for n in lang.settings if n})
         self.bdd_prefixes |= {p.title() for p in lang.bdd_prefixes}
