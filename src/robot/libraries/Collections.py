@@ -36,6 +36,9 @@ class _List:
         Mainly useful for converting tuples and other iterable to lists.
         Use `Create List` from the BuiltIn library for constructing new lists.
         """
+        # Avoid unnecessary conversion if item is already a list.
+        if isinstance(item, list):
+            return item
         return list(item)
 
     def append_to_list(self, list_, *values):
@@ -89,7 +92,9 @@ class _List:
         | ${y} = ['a', 'a', 'b', 'a']
         | ${L1} and ${L2} are not changed.
         """
-        self._validate_lists(*lists)
+        validate_list = self._validate_list
+        for index, item in enumerate(lists, start=1):
+            validate_list(item, index)
         return list(chain.from_iterable(lists))
 
     def set_list_value(self, list_, index, value):
@@ -190,11 +195,17 @@ class _List:
         | ${y} = 'd'
         | ${L5} is not changed
         """
-        self._validate_list(list_)
+        if not is_list_like(list_):
+            raise TypeError(
+                f"Expected argument 1 to be a list or list-like, "
+                f"got {type_name(list_)} instead."
+            )
         try:
-            return list_[self._index_to_int(index)]
+            return list_[int(index)]
+        except ValueError:
+            raise ValueError(f"Cannot convert index '{index}' to an integer.")
         except IndexError:
-            self._index_error(list_, index)
+            raise IndexError(f"Given index {index} is out of the range 0-{len(list_) - 1}.")
 
     def get_slice_from_list(self, list_, start=0, end=None):
         """Returns a slice of the given list between ``start`` and ``end`` indexes.
