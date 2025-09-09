@@ -36,6 +36,9 @@ class _List:
         Mainly useful for converting tuples and other iterable to lists.
         Use `Create List` from the BuiltIn library for constructing new lists.
         """
+        # Avoid unnecessary conversion if item is already a list.
+        if isinstance(item, list):
+            return item
         return list(item)
 
     def append_to_list(self, list_, *values):
@@ -89,7 +92,9 @@ class _List:
         | ${y} = ['a', 'a', 'b', 'a']
         | ${L1} and ${L2} are not changed.
         """
-        self._validate_lists(*lists)
+        validate_list = self._validate_list
+        for index, item in enumerate(lists, start=1):
+            validate_list(item, index)
         return list(chain.from_iterable(lists))
 
     def set_list_value(self, list_, index, value):
@@ -220,6 +225,11 @@ class _List:
         | ${z} = ['a', 'b', 'c']
         | ${L5} is not changed
         """
+        # Inline and quick-exit for common case: Python list, start/end are ints or None
+        # Do as much as possible before any expensive checks
+        if type(list_) is list and (isinstance(start, int) or start is None) and (end is None or isinstance(end, int)):
+            _start = 0 if start is None else start
+            return list_[_start:end]
         self._validate_list(list_)
         start = self._index_to_int(start, True)
         if end is not None:
@@ -256,6 +266,17 @@ class _List:
         | ${x} = 3
         | ${L5} is not changed
         """
+        # Avoid double validation for built-in list, and if slicing/index-check is basic
+        is_builtin_list = type(list_) is list
+        # If everything is most common (fast) path:
+        if is_builtin_list and (isinstance(start, int) or start == "" or start is None) and (end is None or isinstance(end, int)):
+            # Fast-path Python index, start can be "" or None
+            idx = 0 if (not start) else start
+            slc = list_[idx:end]
+            try:
+                return idx + slc.index(value)
+            except ValueError:
+                return -1
         self._validate_list(list_)
         start = self._index_to_int(start, empty_to_zero=True)
         list_ = self.get_slice_from_list(list_, start, end)
@@ -515,6 +536,9 @@ class _List:
     def _index_to_int(self, index, empty_to_zero=False):
         if empty_to_zero and not index:
             return 0
+        # Fast-path int type
+        if isinstance(index, int):
+            return index
         try:
             return int(index)
         except ValueError:
@@ -524,6 +548,9 @@ class _List:
         raise IndexError(f"Given index {index} is out of the range 0-{len(list_) - 1}.")
 
     def _validate_list(self, list_, position=1):
+        # Fast-path for built-in list
+        if type(list_) is list:
+            return
         if not is_list_like(list_):
             raise TypeError(
                 f"Expected argument {position} to be a list or list-like, "
