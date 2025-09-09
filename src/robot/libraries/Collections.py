@@ -547,6 +547,9 @@ class _Dictionary:
         Use `Create Dictionary` from the BuiltIn library for constructing new
         dictionaries.
         """
+        # Fast path for when item is already a dict and not a subclass (avoids unnecessary copy)
+        if type(item) is dict:
+            return item
         return dict(item)
 
     def set_to_dictionary(self, dictionary, *key_value_pairs, **items):
@@ -615,6 +618,13 @@ class _Dictionary:
         """
         self._validate_dictionary(dictionary)
         if default is NOT_SET:
+            # Avoid repeated normalization for better performance:
+            # If dictionary is a real dict (most common case) and ignore_case is False (default for Normalizer)
+            # we can skip Normalizer overhead.
+            if type(dictionary) is dict:
+                if key not in dictionary:
+                    raise AssertionError(f"Dictionary does not contain key '{key}'.")
+                return dictionary.pop(key)
             self.dictionary_should_contain_key(dictionary, key)
             return dictionary.pop(key)
         return dictionary.pop(key, default)
@@ -747,6 +757,17 @@ class _Dictionary:
         Robot Framework 7.0.
         """
         self._validate_dictionary(dictionary)
+        # Micro-optimization: avoid Normalizer if not needed (most frequently, ignore_case is False, and dict is real dict)
+        if not ignore_case and type(dictionary) is dict:
+            if key not in dictionary:
+                msg_to_use = (
+                    msg
+                    if msg is not None
+                    else f"Dictionary does not contain key '{key}'."
+                )
+                raise AssertionError(msg_to_use)
+            return
+
         norm = Normalizer(ignore_case)
         _verify_condition(
             norm.normalize_key(key) in norm.normalize(dictionary),
