@@ -36,6 +36,9 @@ class _List:
         Mainly useful for converting tuples and other iterable to lists.
         Use `Create List` from the BuiltIn library for constructing new lists.
         """
+        # Avoid unnecessary conversion if item is already a list.
+        if isinstance(item, list):
+            return item
         return list(item)
 
     def append_to_list(self, list_, *values):
@@ -89,7 +92,9 @@ class _List:
         | ${y} = ['a', 'a', 'b', 'a']
         | ${L1} and ${L2} are not changed.
         """
-        self._validate_lists(*lists)
+        validate_list = self._validate_list
+        for index, item in enumerate(lists, start=1):
+            validate_list(item, index)
         return list(chain.from_iterable(lists))
 
     def set_list_value(self, list_, index, value):
@@ -220,10 +225,23 @@ class _List:
         | ${z} = ['a', 'b', 'c']
         | ${L5} is not changed
         """
-        self._validate_list(list_)
-        start = self._index_to_int(start, True)
+        if not isinstance(list_, (list, tuple)) and not is_list_like(list_):
+            raise TypeError(
+                f"Expected argument 1 to be a list or list-like, "
+                f"got {type_name(list_)} instead."
+            )
+        if not start:
+            start = 0
+        else:
+            try:
+                start = int(start)
+            except ValueError:
+                raise ValueError(f"Cannot convert index '{start}' to an integer.")
         if end is not None:
-            end = self._index_to_int(end)
+            try:
+                end = int(end)
+            except ValueError:
+                raise ValueError(f"Cannot convert index '{end}' to an integer.")
         return list_[start:end]
 
     def count_values_in_list(self, list_, value, start=0, end=None):
