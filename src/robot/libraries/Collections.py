@@ -24,6 +24,7 @@ from robot.utils import (
 )
 from robot.utils.asserts import assert_equal
 from robot.version import get_version
+from robot.libraries.Collections import NOT_SET
 
 NOT_SET = NotSet()
 
@@ -524,6 +525,10 @@ class _List:
         raise IndexError(f"Given index {index} is out of the range 0-{len(list_) - 1}.")
 
     def _validate_list(self, list_, position=1):
+        # Inline fast test for common built-in types to avoid slow is_list_like() for common lists and tuples
+        t = type(list_)
+        if t is list or t is tuple:  # only accepts real lists and tuples here
+            return
         if not is_list_like(list_):
             raise TypeError(
                 f"Expected argument {position} to be a list or list-like, "
@@ -547,6 +552,9 @@ class _Dictionary:
         Use `Create Dictionary` from the BuiltIn library for constructing new
         dictionaries.
         """
+        # Fast path for when item is already a dict and not a subclass (avoids unnecessary copy)
+        if type(item) is dict:
+            return item
         return dict(item)
 
     def set_to_dictionary(self, dictionary, *key_value_pairs, **items):
@@ -723,7 +731,13 @@ class _Dictionary:
 
         Support for ``default`` is new in Robot Framework 6.0.
         """
-        self._validate_dictionary(dictionary)
+        # Inline validate logic. Avoid extra call and function frame for common case.
+        # Avoid unnecessary format string building unless error raised.
+        if not is_dict_like(dictionary):
+            raise TypeError(
+                f"Expected argument 1 to be a dictionary, "
+                f"got {type_name(dictionary)} instead."
+            )
         try:
             return dictionary[key]
         except KeyError:
@@ -979,6 +993,7 @@ class _Dictionary:
     def _validate_dictionary(self, *dictionaries):
         for index, dictionary in enumerate(dictionaries, start=1):
             if not is_dict_like(dictionary):
+                # Only build error message if needed to raise exception
                 raise TypeError(
                     f"Expected argument {index} to be a dictionary, "
                     f"got {type_name(dictionary)} instead."
@@ -1246,10 +1261,12 @@ class Collections(_List, _Dictionary):
         if not isinstance(pattern, str):
             raise TypeError(f"Pattern must be string, got '{type_name(pattern)}'.")
         regexp = False
-        if pattern.startswith("regexp="):
+        # Avoids chained .startswith lookups for pattern prefix
+        prefix = pattern[:7]
+        if prefix == "regexp=":
             pattern = pattern[7:]
             regexp = True
-        elif pattern.startswith("glob="):
+        elif pattern[:5] == "glob=":
             pattern = pattern[5:]
         matcher = Matcher(
             pattern,
@@ -1257,9 +1274,14 @@ class Collections(_List, _Dictionary):
             spaceless=ignore_whitespace,
             regexp=regexp,
         )
-        return [
-            item for item in iterable if isinstance(item, str) and matcher.match(item)
-        ]
+
+        # Micro-optimization: pull methods/attrs as locals for faster lookup inside loops
+        match = matcher.match
+        str_type = str
+        # Use list comprehension for performance (unchanged), pull isinstance out as local for attribute lookup efficiency
+        isinstance_ = isinstance
+
+        return [item for item in iterable if isinstance_(item, str_type) and match(item)]
 
 
 def _verify_condition(condition, default_message, message, values=False):
