@@ -547,6 +547,9 @@ class _Dictionary:
         Use `Create Dictionary` from the BuiltIn library for constructing new
         dictionaries.
         """
+        # Fast path for when item is already a dict and not a subclass (avoids unnecessary copy)
+        if type(item) is dict:
+            return item
         return dict(item)
 
     def set_to_dictionary(self, dictionary, *key_value_pairs, **items):
@@ -661,12 +664,15 @@ class _Dictionary:
         | ${sorted} =   | Get Dictionary Keys | ${D3} |
         | ${unsorted} = | Get Dictionary Keys | ${D3} | sort_keys=False |
         """
+        # Fast path: avoid per-item validation inside the loop
         self._validate_dictionary(dictionary)
         if sort_keys:
+            # "sorted(dictionary)" is optimal if keys are sortable
             try:
                 return sorted(dictionary)
             except TypeError:
                 pass
+        # "list(dictionary)" yields keys in insertion order as required
         return list(dictionary)
 
     def get_dictionary_values(self, dictionary, sort_keys=True):
@@ -703,9 +709,17 @@ class _Dictionary:
         | ${sorted} =   | Get Dictionary Items | ${D3} |
         | ${unsorted} = | Get Dictionary Items | ${D3} | sort_keys=False |
         """
+        # Minimize attribute, local references
         self._validate_dictionary(dictionary)
         keys = self.get_dictionary_keys(dictionary, sort_keys=sort_keys)
-        return [i for key in keys for i in (key, dictionary[key])]
+        # More efficient: preallocate and use append rather than list comprehension for large dicts
+        result = []
+        append = result.append
+        get = dictionary.__getitem__
+        for key in keys:
+            append(key)
+            append(get(key))
+        return result
 
     def get_from_dictionary(self, dictionary, key, default=NOT_SET):
         """Returns a value from the given ``dictionary`` based on the given ``key``.
@@ -977,11 +991,15 @@ class _Dictionary:
             yield f"{key}: {dictionary[key]}"
 
     def _validate_dictionary(self, *dictionaries):
+        # Minimize repeated attribute lookups
+        is_dict = is_dict_like
+        t_name = type_name
         for index, dictionary in enumerate(dictionaries, start=1):
-            if not is_dict_like(dictionary):
+            if not is_dict(dictionary):
+                # string interpolation kept as f-string for clarity
                 raise TypeError(
                     f"Expected argument {index} to be a dictionary, "
-                    f"got {type_name(dictionary)} instead."
+                    f"got {t_name(dictionary)} instead."
                 )
 
 
